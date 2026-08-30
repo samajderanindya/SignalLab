@@ -13,7 +13,7 @@ jobs:
 
       - name: Extract project ZIP
         run: |
-          unzip -o signallab-fixed-v2.zip -d project
+          unzip -o SignalLab-live-feed-v4.zip -d project
 
       - name: Fix accessibility service description
         run: |
