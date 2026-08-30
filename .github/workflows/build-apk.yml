@@ -15,6 +15,57 @@ jobs:
         run: |
           unzip -o signallab-fixed-v2.zip -d project
 
+      - name: Fix accessibility service description
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          project = Path("project/signallab")
+          config = project / "app/src/main/res/xml/accessibility_service_config.xml"
+          strings = project / "app/src/main/res/values/strings.xml"
+
+          old = 'android:description="Reads visible Olymp Trade quote text for SignalLab market analysis. It does not place trades."'
+          new = 'android:description="@string/accessibility_service_description"'
+
+          if not config.exists():
+              raise SystemExit(f"Missing file: {config}")
+
+          text = config.read_text(encoding="utf-8")
+
+          if old in text:
+              text = text.replace(old, new)
+          elif '@string/accessibility_service_description' not in text:
+              raise SystemExit(
+                  f"Expected accessibility description not found in {config}"
+              )
+
+          config.write_text(text, encoding="utf-8")
+
+          if strings.exists():
+              st = strings.read_text(encoding="utf-8")
+
+              if 'name="accessibility_service_description"' not in st:
+                  if '</resources>' not in st:
+                      raise SystemExit(f"Invalid strings file: {strings}")
+
+                  st = st.replace(
+                      '</resources>',
+                      '    <string name="accessibility_service_description">Reads visible Olymp Trade quote text for SignalLab market analysis. It does not place trades.</string>\n</resources>'
+                  )
+
+                  strings.write_text(st, encoding="utf-8")
+          else:
+              strings.parent.mkdir(parents=True, exist_ok=True)
+
+              strings.write_text(
+                  '<?xml version="1.0" encoding="utf-8"?>\n'
+                  '<resources>\n'
+                  '    <string name="accessibility_service_description">Reads visible Olymp Trade quote text for SignalLab market analysis. It does not place trades.</string>\n'
+                  '</resources>\n',
+                  encoding="utf-8"
+              )
+          PY
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -27,7 +78,16 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: Generate debug keystore
-        run: keytool -genkeypair -v -keystore project/signallab/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+        run: |
+          keytool -genkeypair -v \
+            -keystore project/signallab/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build APK
         working-directory: project/signallab
