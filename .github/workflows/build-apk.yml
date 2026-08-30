@@ -66,6 +66,39 @@ jobs:
               )
           PY
 
+      - name: Fix LiveMarketFeed Kotlin source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "project/signallab/app/src/main/java/com/example/data/engine/LiveMarketFeed.kt"
+          )
+
+          if not path.exists():
+              raise SystemExit(f"Missing file: {path}")
+
+          text = path.read_text(encoding="utf-8")
+
+          old = 'return buckets.entries.takeLast(max(1, count)).map { (bucket, group) ->'
+
+          new = '''val requestedCount = count.coerceAtLeast(1)
+          val selectedEntries = buckets.entries.toList().takeLast(requestedCount)
+
+          return selectedEntries.map { entry ->
+              val bucket = entry.key
+              val group = entry.value'''
+
+          if old not in text:
+              raise SystemExit(
+                  "Expected LiveMarketFeed map expression was not found"
+              )
+
+          text = text.replace(old, new)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
