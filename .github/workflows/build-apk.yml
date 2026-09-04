@@ -1,10 +1,10 @@
-name: Build SignalLab APK
+name: Inspect SignalLab Sources
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  inspect:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,39 +16,18 @@ jobs:
           rm -rf project
           unzip -o SignalLab-camera-v2-fixed.zip -d project
 
-      - name: Fix accessibility service description
+      - name: Show project structure
         run: |
-          find project/signallab/app/src/main/res -name "accessibility_service_config.xml" -type f -exec sed -i 's/ android:description="[^"]*"//g' {} \;
+          find project/signallab/app/src/main/java -type f -name '*.kt' | sort
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.3.1'
-
-      - name: Generate debug keystore
+      - name: Print CameraScannerScreen.kt
         run: |
-          keytool -genkeypair -v \
-            -keystore project/signallab/debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+          echo '===== CAMERA SCANNER SOURCE ====='
+          cat project/signallab/app/src/main/java/com/example/ui/screens/CameraScannerScreen.kt
+          echo '===== END CAMERA SCANNER SOURCE ====='
 
-      - name: Build APK
-        working-directory: project/signallab
-        run: gradle assembleDebug --stacktrace
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SignalLab-camera-v2-build
-          path: project/signallab/**/build/outputs/apk/debug/*.apk
+      - name: Print LiveMarketFeed.kt
+        run: |
+          echo '===== LIVE MARKET FEED SOURCE ====='
+          cat project/signallab/app/src/main/java/com/example/data/engine/LiveMarketFeed.kt
+          echo '===== END LIVE MARKET FEED SOURCE ====='
