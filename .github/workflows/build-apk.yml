@@ -68,9 +68,21 @@ jobs:
                   '</resources>\n'
               )
 
-          # Do not perform any speculative Kotlin regex edits here.
-          # The next build log will show the exact original source and model types.
-          print("Safe Android/resource patches applied; LiveMarketFeed left unchanged for inspection.")
+          # Kotlin compatibility fix:
+          # buckets.entries is a Set, while takeLast() is being resolved only for List here.
+          # Convert entries to a List before taking the requested tail.
+          feed = root / "app/src/main/java/com/example/data/engine/LiveMarketFeed.kt"
+          if feed.exists():
+              text = feed.read_text()
+              old = "return buckets.entries.takeLast(max(1, count)).map { (bucket, group) ->"
+              new = "return buckets.entries.toList().takeLast(max(1, count)).map { entry ->\n            val bucket = entry.key\n            val group = entry.value"
+              if old in text:
+                  text = text.replace(old, new, 1)
+              else:
+                  raise SystemExit("Expected LiveMarketFeed.kt line was not found; refusing an unsafe patch")
+              feed.write_text(text)
+
+          print("Safe patches applied, including the LiveMarketFeed entries.toList() compatibility fix.")
           PY
 
       - name: Set up Java
