@@ -6,7 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -16,105 +15,46 @@ jobs:
           rm -rf project
           unzip -o SignalLab-camera-v2-fixed.zip -d project
 
-      - name: Fix CameraScannerScreen.kt
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path(
-              "project/signallab/app/src/main/java/com/example/ui/screens/CameraScannerScreen.kt"
-          )
-
-          text = p.read_text()
-
-          text = text.replace(
-              "runCatching { cameraProvider?.unbindAll() }",
-              "runCatching { }"
-          )
-
-          p.write_text(text)
-
-          print("CameraScannerScreen.kt fixed.")
-          PY
-
-      - name: Fix accessibility service description
+      - name: Patch project before build
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
-          xml = Path(
-              "project/signallab/app/src/main/res/xml/accessibility_service_config.xml"
-          )
+          root = Path("project/signallab")
 
+          # Camera source: remove reference to an unavailable cameraProvider.
+          p = root / "app/src/main/java/com/example/ui/screens/CameraScannerScreen.kt"
+          text = p.read_text()
+          text = text.replace("runCatching { cameraProvider?.unbindAll() }", "runCatching { }")
+          p.write_text(text)
+
+          # Accessibility description must reference a string resource.
+          xml = root / "app/src/main/res/xml/accessibility_service_config.xml"
           text = xml.read_text()
-
-          text = re.sub(
-              r'android:description="[^"]*"',
-              'android:description="@string/accessibility_service_description"',
-              text,
-              count=1
-          )
-
+          text = re.sub(r'android:description="[^"]*"', 'android:description="@string/accessibility_service_description"', text, count=1)
           xml.write_text(text)
 
-          print("Accessibility service XML fixed.")
-          PY
-
-      - name: Add accessibility service description string
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          strings_file = Path(
-              "project/signallab/app/src/main/res/values/strings.xml"
-          )
-
-          if strings_file.exists():
-              text = strings_file.read_text()
-
+          strings = root / "app/src/main/res/values/strings.xml"
+          if strings.exists():
+              text = strings.read_text()
               if "accessibility_service_description" not in text:
-                  insert = (
-                      '    <string name="accessibility_service_description">'
-                      'Reads visible Olymp Trade quote text for SignalLab market analysis. '
-                      'It does not place trades.'
-                      '</string>\n'
-                  )
-
-                  text = text.replace("</resources>", insert + "</resources>")
-                  strings_file.write_text(text)
-
-                  print("Accessibility service description added.")
-              else:
-                  print("Accessibility service description already exists.")
+                  text = text.replace("</resources>", '    <string name="accessibility_service_description">Reads visible quote text for SignalLab market analysis. It does not place trades.</string>\n</resources>")
+                  strings.write_text(text)
           else:
-              strings_file.parent.mkdir(parents=True, exist_ok=True)
+              strings.parent.mkdir(parents=True, exist_ok=True)
+              strings.write_text('''<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="accessibility_service_description">Reads visible quote text for SignalLab market analysis. It does not place trades.</string>\n</resources>\n''')
 
-              strings_file.write_text(
-                  '''<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="accessibility_service_description">Reads visible Olymp Trade quote text for SignalLab market analysis. It does not place trades.</string>
-          </resources>
-          '''
-              )
-
-              print("strings.xml created.")
+          # LiveMarketFeed: make the grouped Map.Entry types explicit and lambda item references explicit.
+          p = root / "app/src/main/java/com/example/data/engine/LiveMarketFeed.kt"
+          text = p.read_text()
+          text, n = re.subn(r'\.map\s*\{\s*\(bucket,\s*group\)\s*->', '.map { entry ->\n                val bucket: Long = entry.key\n                val group: List<LiveTick> = entry.value', text, count=1)
+          if n:
+              text = re.sub(r'group\.maxOf\s*\{\s*it\.price\s*\}', 'group.maxOf { tick -> tick.price }', text)
+              text = re.sub(r'group\.minOf\s*\{\s*it\.price\s*\}', 'group.minOf { tick -> tick.price }', text)
+          p.write_text(text)
+          print("Project patches applied.")
           PY
-
-      - name: Verify fixes
-        run: |
-          echo "===== CAMERA FILE CHECK ====="
-          grep -n "unbindAll" \
-            project/signallab/app/src/main/java/com/example/ui/screens/CameraScannerScreen.kt || true
-
-          echo ""
-          echo "===== ACCESSIBILITY XML ====="
-          cat project/signallab/app/src/main/res/xml/accessibility_service_config.xml
-
-          echo ""
-          echo "===== STRINGS.XML CHECK ====="
-          grep -n "accessibility_service_description" \
-            project/signallab/app/src/main/res/values/strings.xml || true
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -129,16 +69,7 @@ jobs:
 
       - name: Build APK
         working-directory: project/signallab
-        run: |
-          gradle assembleDebug --stacktrace
-
-      - name: Find APK
-        run: |
-          echo "===== APK FILES ====="
-          find project/signallab/app/build/outputs/apk \
-            -type f \
-            -name "*.apk" \
-            -print
+        run: gradle assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
