@@ -16,6 +16,10 @@ jobs:
           rm -rf project
           unzip -o SignalLab-camera-v2-fixed.zip -d project
 
+      - name: Fix accessibility service description
+        run: |
+          find project/signallab/app/src/main/res -name "accessibility_service_config.xml" -type f -exec sed -i 's/ android:description="[^"]*"//g' {} \;
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
