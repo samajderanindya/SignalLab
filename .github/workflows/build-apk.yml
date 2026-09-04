@@ -1,10 +1,10 @@
-name: Inspect SignalLab Sources
+name: Build SignalLab APK
 
 on:
   workflow_dispatch:
 
 jobs:
-  inspect:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,18 +16,71 @@ jobs:
           rm -rf project
           unzip -o SignalLab-camera-v2-fixed.zip -d project
 
-      - name: Show project structure
+      - name: Fix CameraScannerScreen.kt
         run: |
-          find project/signallab/app/src/main/java -type f -name '*.kt' | sort
+          python3 - <<'PY'
+          from pathlib import Path
 
-      - name: Print CameraScannerScreen.kt
-        run: |
-          echo '===== CAMERA SCANNER SOURCE ====='
-          cat project/signallab/app/src/main/java/com/example/ui/screens/CameraScannerScreen.kt
-          echo '===== END CAMERA SCANNER SOURCE ====='
+          p = Path("project/signallab/app/src/main/java/com/example/ui/screens/CameraScannerScreen.kt")
+          text = p.read_text()
 
-      - name: Print LiveMarketFeed.kt
+          text = text.replace(
+              "runCatching { cameraProvider?.unbindAll() }",
+              "runCatching { }"
+          )
+
+          p.write_text(text)
+          print("CameraScannerScreen.kt fixed.")
+          PY
+
+      - name: Fix accessibility service description
         run: |
-          echo '===== LIVE MARKET FEED SOURCE ====='
-          cat project/signallab/app/src/main/java/com/example/data/engine/LiveMarketFeed.kt
-          echo '===== END LIVE MARKET FEED SOURCE ====='
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          xml = Path("project/signallab/app/src/main/res/xml/accessibility_service_config.xml")
+          text = xml.read_text()
+
+          text = re.sub(
+              r'android:description="[^"]*"',
+              'android:description="@string/accessibility_service_description"',
+              text,
+              count=1
+          )
+
+          xml.write_text(text)
+          print("Accessibility service XML fixed.")
+          PY
+
+      - name: Show applied fixes
+        run: |
+          echo "===== CAMERA FIX CHECK ====="
+          grep -n "unbindAll" project/signallab/app/src/main/java/com/example/ui/screens/CameraScannerScreen.kt || true
+
+          echo "===== ACCESSIBILITY XML CHECK ====="
+          cat project/signallab/app/src/main/res/xml/accessibility_service_config.xml
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build APK
+        working-directory: project/signallab
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Find APK
+        run: |
+          echo "===== APK FILES ====="
+          find project/signallab/app/build/outputs/apk -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SignalLab-debug-APK
+          path: project/signallab/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
