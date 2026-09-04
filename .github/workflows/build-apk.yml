@@ -13,7 +13,7 @@ jobs:
 
       - name: Extract project ZIP
         run: |
-          unzip -o SignalLab-camera-v2.zip -d project
+          unzip -o SignalLab-camera-v2-fixed.zip -d project
 
       - name: Fix accessibility service description
         run: |
