@@ -61,14 +61,60 @@ jobs:
           print("Accessibility service XML fixed.")
           PY
 
-      - name: Show applied fixes
+      - name: Add accessibility service description string
         run: |
-          echo "===== CAMERA FIX CHECK ====="
+          python3 - <<'PY'
+          from pathlib import Path
+
+          strings_file = Path(
+              "project/signallab/app/src/main/res/values/strings.xml"
+          )
+
+          if strings_file.exists():
+              text = strings_file.read_text()
+
+              if "accessibility_service_description" not in text:
+                  insert = (
+                      '    <string name="accessibility_service_description">'
+                      'Reads visible Olymp Trade quote text for SignalLab market analysis. '
+                      'It does not place trades.'
+                      '</string>\n'
+                  )
+
+                  text = text.replace("</resources>", insert + "</resources>")
+                  strings_file.write_text(text)
+
+                  print("Accessibility service description added.")
+              else:
+                  print("Accessibility service description already exists.")
+          else:
+              strings_file.parent.mkdir(parents=True, exist_ok=True)
+
+              strings_file.write_text(
+                  '''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="accessibility_service_description">Reads visible Olymp Trade quote text for SignalLab market analysis. It does not place trades.</string>
+          </resources>
+          '''
+              )
+
+              print("strings.xml created.")
+          PY
+
+      - name: Verify fixes
+        run: |
+          echo "===== CAMERA FILE CHECK ====="
           grep -n "unbindAll" \
             project/signallab/app/src/main/java/com/example/ui/screens/CameraScannerScreen.kt || true
 
-          echo "===== ACCESSIBILITY XML CHECK ====="
+          echo ""
+          echo "===== ACCESSIBILITY XML ====="
           cat project/signallab/app/src/main/res/xml/accessibility_service_config.xml
+
+          echo ""
+          echo "===== STRINGS.XML CHECK ====="
+          grep -n "accessibility_service_description" \
+            project/signallab/app/src/main/res/values/strings.xml || true
 
       - name: Set up Java
         uses: actions/setup-java@v4
